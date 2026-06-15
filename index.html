@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>개발일지</title>
+  <meta name="description" content="팀 개발일지 — 초대받은 멤버만 접근하는 비공개 타임라인" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <!-- 데모 배너 (설정 전에만 보임) -->
+  <div id="demo-banner" class="demo-banner hidden">
+    🧪 <b>데모 모드</b>로 실행 중입니다 — 화면을 둘러보세요.
+    실제로 쓰려면 <code>config.js</code> 에 Firebase 설정을 넣으세요. (README 참고)
+  </div>
+
+  <!-- 게이트: 로그인 / 권한 없음 화면 -->
+  <div id="gate" class="gate hidden"></div>
+
+  <!-- 앱 본문 -->
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="wordmark">
+          <span id="wm-name">devlog</span><span class="slash">/</span><span class="dot"></span>
+        </div>
+        <div class="topbar-right" id="topbar-right"></div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <!-- 왼쪽: 타임라인 -->
+      <section class="col-main">
+        <div id="composer-slot"></div>
+        <div class="feed-head">
+          <h2>타임라인</h2>
+          <span class="count" id="feed-count"></span>
+        </div>
+        <div class="feed" id="feed"></div>
+      </section>
+
+      <!-- 오른쪽: 마일스톤 -->
+      <aside class="col-side">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">Roadmap</span>
+              <h2>마일스톤</h2>
+            </div>
+            <button id="ms-add-btn" class="btn btn-sm btn-primary hidden">+ 추가</button>
+          </div>
+          <div class="timeline" id="milestones"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- 모달/토스트가 들어갈 자리 -->
+  <div id="overlay-root"></div>
+  <div id="toast" class="toast"></div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

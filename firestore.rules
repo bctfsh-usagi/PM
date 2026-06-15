@@ -1,0 +1,79 @@
+rules_version = '2';
+
+// =============================================================
+//  Firestore 보안 규칙 — "권한"을 실제로 강제하는 부분입니다.
+//  이 파일 내용을 Firebase 콘솔 → Firestore Database → 규칙 탭에
+//  통째로 붙여넣고 "게시" 하세요.
+//
+//  중요: 아래 ownerEmail() 의 이메일을 config.js 의 OWNER_EMAIL 과
+//  똑같이 본인 구글 이메일로 바꿔주세요.
+// =============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── 주인(나)의 이메일 ── 여기를 본인 이메일로 변경 ──
+    function ownerEmail() {
+      return "여기에-내-구글-이메일@gmail.com";
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function myEmail() {
+      return request.auth.token.email;
+    }
+    function isOwner() {
+      return signedIn() && myEmail() == ownerEmail();
+    }
+    // 내가 멤버 목록에 등록돼 있는지
+    function isMember() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/members/$(myEmail()));
+    }
+    function myPerms() {
+      return get(/databases/$(database)/documents/members/$(myEmail())).data;
+    }
+    function canRead() {
+      return isOwner() || (isMember() && myPerms().canRead == true);
+    }
+    function canWrite() {
+      return isOwner() || (isMember() && myPerms().canWrite == true);
+    }
+    function canComment() {
+      return isOwner() || (isMember() && myPerms().canComment == true);
+    }
+
+    // ── 멤버(권한) 목록 ───────────────────────────────
+    // 주인만 추가/수정/삭제 가능. 본인은 자기 권한 문서만 읽을 수 있음.
+    match /members/{email} {
+      allow read:  if isOwner() || (signedIn() && email == myEmail());
+      allow write: if isOwner();
+    }
+
+    // ── 글(타임라인) ─────────────────────────────────
+    match /posts/{postId} {
+      allow read:   if canRead();
+      allow create: if canWrite()
+                    && request.resource.data.authorEmail == myEmail();
+      allow update, delete: if isOwner()
+                    || (signedIn() && resource.data.authorEmail == myEmail());
+
+      // ── 댓글 ──
+      match /comments/{commentId} {
+        allow read:   if canRead();
+        allow create: if canComment()
+                      && request.resource.data.authorEmail == myEmail();
+        allow update, delete: if isOwner()
+                      || (signedIn() && resource.data.authorEmail == myEmail());
+      }
+    }
+
+    // ── 마일스톤 ─────────────────────────────────────
+    // 읽기는 멤버 모두, 등록/수정/삭제는 주인만 (PM이 직접 관리)
+    match /milestones/{id} {
+      allow read:  if canRead();
+      allow write: if isOwner();
+    }
+  }
+}
