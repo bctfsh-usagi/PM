@@ -131,6 +131,7 @@ async function createFirebaseBackend(cfg, owner) {
         authorPhoto: currentUser.photo, content, createdAt: serverTimestamp(),
       });
     },
+    updatePost(id, content) { return updateDoc(doc(db, "posts", id), { content, editedAt: serverTimestamp() }); },
     deletePost(id) { return deleteDoc(doc(db, "posts", id)); },
     watchComments(postId, cb) {
       const q = query(collection(db, "posts", postId, "comments"), orderBy("createdAt", "asc"));
@@ -144,6 +145,7 @@ async function createFirebaseBackend(cfg, owner) {
         authorPhoto: currentUser.photo, content, createdAt: serverTimestamp(),
       });
     },
+    updateComment(postId, cid, content) { return updateDoc(doc(db, "posts", postId, "comments", cid), { content, editedAt: serverTimestamp() }); },
     deleteComment(postId, cid) { return deleteDoc(doc(db, "posts", postId, "comments", cid)); },
     watchMilestones(cb) {
       const q = query(collection(db, "milestones"), orderBy("date", "asc"));
@@ -219,6 +221,7 @@ function createDemoBackend(owner) {
       emitPosts();
     },
     async deletePost(id) { posts = posts.filter((p) => p.id !== id); delete commentsByPost[id]; emitPosts(); },
+    async updatePost(id, content) { posts = posts.map((p) => (p.id === id ? { ...p, content } : p)); emitPosts(); },
     watchComments(postId, cb) {
       (cSubs[postId] ||= new Set()).add(cb); cb([...(commentsByPost[postId] || [])]);
       return () => cSubs[postId]?.delete(cb);
@@ -229,6 +232,10 @@ function createDemoBackend(owner) {
     },
     async deleteComment(postId, cid) {
       commentsByPost[postId] = (commentsByPost[postId] || []).filter((c) => c.id !== cid);
+      emitComments(postId);
+    },
+    async updateComment(postId, cid, content) {
+      commentsByPost[postId] = (commentsByPost[postId] || []).map((c) => (c.id === cid ? { ...c, content } : c));
       emitComments(postId);
     },
     watchMilestones(cb) { msSubs.add(cb); emitMs(); return () => msSubs.delete(cb); },
@@ -305,6 +312,7 @@ function postHTML(p) {
         <div class="post-time">${timeAgo(p.createdAt)}</div>
       </div>
       <div class="post-actions">
+        ${canDel ? `<button class="icon-btn" title="수정" data-action="edit-post" data-id="${p.id}">✎</button>` : ""}
         ${canDel ? `<button class="icon-btn danger" title="삭제" data-action="delete-post" data-id="${p.id}">✕</button>` : ""}
       </div>
     </div>
@@ -346,6 +354,7 @@ function updateComments(pid) {
         </div>
         <div class="comment-text">${linkify(c.content)}</div>
       </div>
+      ${canDel ? `<button class="icon-btn" title="수정" data-action="edit-comment" data-postid="${pid}" data-id="${c.id}">✎</button>` : ""}
       ${canDel ? `<button class="icon-btn danger" title="삭제" data-action="delete-comment" data-postid="${pid}" data-id="${c.id}">✕</button>` : ""}
     </div>`;
   }).join("");
@@ -416,6 +425,50 @@ function openMilestoneModal(existing) {
     </div>
   </div>`;
   setTimeout(() => $("#ms-title")?.focus(), 30);
+}
+
+function openPostEditModal(p) {
+  if (!p) return;
+  el("overlay-root").innerHTML = `
+  <div class="modal-back" data-action="close-modal-bg">
+    <div class="modal" style="max-width:520px">
+      <div class="modal-head">
+        <div><h2>기록 수정</h2></div>
+        <button class="icon-btn" data-action="close-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="fld"><span>내용</span>
+          <textarea id="edit-post-text" rows="5">${esc(p.content)}</textarea></label>
+        <div class="modal-foot">
+          <button class="btn btn-sm" data-action="close-modal">취소</button>
+          <button class="btn btn-sm btn-primary" data-action="post-save" data-id="${p.id}">저장</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  setTimeout(() => { const t = $("#edit-post-text"); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }, 30);
+}
+
+function openCommentEditModal(pid, c) {
+  if (!c) return;
+  el("overlay-root").innerHTML = `
+  <div class="modal-back" data-action="close-modal-bg">
+    <div class="modal" style="max-width:480px">
+      <div class="modal-head">
+        <div><h2>댓글 수정</h2></div>
+        <button class="icon-btn" data-action="close-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="fld"><span>내용</span>
+          <textarea id="edit-comment-text" rows="3">${esc(c.content)}</textarea></label>
+        <div class="modal-foot">
+          <button class="btn btn-sm" data-action="close-modal">취소</button>
+          <button class="btn btn-sm btn-primary" data-action="comment-save" data-postid="${pid}" data-id="${c.id}">저장</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  setTimeout(() => { const t = $("#edit-comment-text"); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }, 30);
 }
 
 function openMembersModal() {
@@ -495,6 +548,14 @@ function onClick(e) {
     case "delete-post":
       if (confirm("이 기록을 삭제할까요?")) return safe(() => backend.deletePost(id));
       return;
+    case "edit-post":
+      return openPostEditModal(posts.find((p) => p.id === id));
+    case "post-save": {
+      const v = $("#edit-post-text").value.trim();
+      if (!v) return toast("내용을 입력하세요.");
+      closeModal();
+      return safe(() => backend.updatePost(id, v), "수정했습니다.");
+    }
 
     case "toggle-comments": {
       openComments.has(id) ? openComments.delete(id) : openComments.add(id);
@@ -508,6 +569,14 @@ function onClick(e) {
     }
     case "delete-comment":
       return safe(() => backend.deleteComment(t.dataset.postid, id));
+    case "edit-comment":
+      return openCommentEditModal(t.dataset.postid, (commentsCache[t.dataset.postid] || []).find((c) => c.id === id));
+    case "comment-save": {
+      const v = $("#edit-comment-text").value.trim();
+      if (!v) return toast("내용을 입력하세요.");
+      closeModal();
+      return safe(() => backend.updateComment(t.dataset.postid, id, v), "수정했습니다.");
+    }
 
     case "open-members": return openMembersModal();
     case "add-member": {
