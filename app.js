@@ -74,6 +74,12 @@ function toast(msg) {
   clearTimeout(toast._t);
   toast._t = setTimeout(() => t.classList.remove("show"), 2400);
 }
+// 다크/라이트 전환 (선택은 이 브라우저에 저장됨)
+function toggleTheme() {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("devlog-theme", next); } catch (_) {}
+}
 
 /* =========================================================
    2. 상태
@@ -318,7 +324,9 @@ function renderTopbar() {
   el("wm-name").textContent = PROJECT_NAME || "devlog";
   const adminBtn = myRole.isOwner
     ? `<button class="btn btn-sm" data-action="open-members">멤버 관리</button>` : "";
+  const themeBtn = `<button class="icon-btn theme-toggle" data-action="toggle-theme" title="다크/라이트 전환" aria-label="다크/라이트 전환">◐</button>`;
   el("topbar-right").innerHTML = `
+    ${themeBtn}
     ${adminBtn}
     <div class="user-chip">
       ${avatarHTML(currentUser)}
@@ -713,6 +721,7 @@ function onClick(e) {
   switch (action) {
     case "signin":  return safe(() => backend.signIn());
     case "signout": return safe(() => backend.signOut());
+    case "toggle-theme": return toggleTheme();
 
     case "compose-submit": {
       const ta = el("composer-input"); const v = ta.value.trim();
