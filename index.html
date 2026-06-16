@@ -8,10 +8,11 @@
   <script>
     (function () {
       try {
-        var t = localStorage.getItem("devlog-theme");
-        if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        var t = localStorage.getItem("devlog-theme") || "dark";
         document.documentElement.dataset.theme = t;
-      } catch (e) {}
+      } catch (e) {
+        document.documentElement.dataset.theme = "dark";
+      }
     })();
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
