@@ -62,6 +62,12 @@ function dday(dateStr) {
   if (diff === 0) return "D-DAY";
   return null;
 }
+// 로컬 시간대 기준 YYYY-MM-DD (글 작성일을 달력 칸과 맞추기 위함)
+function localYMD(d) {
+  if (!(d instanceof Date) || isNaN(d)) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 function toast(msg) {
   const t = el("toast");
   t.textContent = msg; t.classList.add("show");
@@ -78,11 +84,47 @@ let myRole = null;               // {isOwner,canRead,canWrite,canComment}
 let posts = [];
 let milestones = [];
 let members = [];
+let links = [];
 let openComments = new Set();
 let commentSubs = {};            // postId -> unsub
 let commentsCache = {};          // postId -> array
 const STATUS = ["planned", "active", "done"];
 const STATUS_KO = { planned: "예정", active: "진행중", done: "완료" };
+
+// 한국 공휴일 (대체공휴일 포함). 새 연도는 아래에 줄만 추가하면 됩니다.
+const HOLIDAYS = {
+  // ── 2026 ──
+  "2026-01-01": "신정",
+  "2026-02-16": "설날 연휴", "2026-02-17": "설날", "2026-02-18": "설날 연휴",
+  "2026-03-01": "삼일절", "2026-03-02": "대체공휴일(삼일절)",
+  "2026-05-05": "어린이날",
+  "2026-05-24": "부처님오신날", "2026-05-25": "대체공휴일(부처님오신날)",
+  "2026-06-06": "현충일",
+  "2026-08-15": "광복절", "2026-08-17": "대체공휴일(광복절)",
+  "2026-09-24": "추석 연휴", "2026-09-25": "추석", "2026-09-26": "추석 연휴",
+  "2026-10-03": "개천절", "2026-10-05": "대체공휴일(개천절)",
+  "2026-10-09": "한글날",
+  "2026-12-25": "성탄절",
+  // ── 2027 ──
+  "2027-01-01": "신정",
+  "2027-02-06": "설날 연휴", "2027-02-07": "설날", "2027-02-08": "설날 연휴", "2027-02-09": "대체공휴일(설날)",
+  "2027-03-01": "삼일절",
+  "2027-05-05": "어린이날",
+  "2027-05-13": "부처님오신날",
+  "2027-06-06": "현충일",
+  "2027-08-15": "광복절", "2027-08-16": "대체공휴일(광복절)",
+  "2027-09-14": "추석 연휴", "2027-09-15": "추석", "2027-09-16": "추석 연휴",
+  "2027-10-03": "개천절", "2027-10-04": "대체공휴일(개천절)",
+  "2027-10-09": "한글날", "2027-10-11": "대체공휴일(한글날)",
+  "2027-12-25": "성탄절", "2027-12-27": "대체공휴일(성탄절)",
+};
+const WEEK_KO = ["일", "월", "화", "수", "목", "금", "토"];
+
+// 달력 상태
+const _t0 = new Date(); _t0.setHours(0, 0, 0, 0);
+let calY = _t0.getFullYear();
+let calM = _t0.getMonth();   // 0~11
+let selectedDate = null;     // "YYYY-MM-DD" 또는 null(전체)
 
 /* =========================================================
    3-A. Firebase 백엔드
@@ -154,6 +196,13 @@ async function createFirebaseBackend(cfg, owner) {
     addMilestone(data) { return addDoc(collection(db, "milestones"), { ...data, createdAt: serverTimestamp() }); },
     updateMilestone(id, data) { return updateDoc(doc(db, "milestones", id), data); },
     deleteMilestone(id) { return deleteDoc(doc(db, "milestones", id)); },
+    watchLinks(cb) {
+      const q = query(collection(db, "links"), orderBy("createdAt", "asc"));
+      return onSnapshot(q, (snap) => cb(mapDocs(snap)), (e) => console.error("links", e));
+    },
+    addLink(data) { return addDoc(collection(db, "links"), { ...data, createdAt: serverTimestamp() }); },
+    updateLink(id, data) { return updateDoc(doc(db, "links", id), data); },
+    deleteLink(id) { return deleteDoc(doc(db, "links", id)); },
     watchMembers(cb) { return onSnapshot(collection(db, "members"), (snap) => cb(mapDocs(snap)), (e) => console.error("members", e)); },
     setMember(email, perms) { return setDoc(doc(db, "members", email), { email, ...perms }, { merge: true }); },
     removeMember(email) { return deleteDoc(doc(db, "members", email)); },
@@ -200,13 +249,18 @@ function createDemoBackend(owner) {
     { id: "dev@demo.dev", email: "dev@demo.dev", canRead: true, canWrite: true, canComment: true },
     { id: "viewer@demo.dev", email: "viewer@demo.dev", canRead: true, canWrite: false, canComment: true },
   ];
+  let links = [
+    { id: "l1", title: "기획 문서 모음", url: "https://example.com/docs" },
+    { id: "l2", title: "위키 / 컨플루언스", url: "https://example.com/wiki" },
+  ];
 
-  const authSubs = new Set(), postSubs = new Set(), msSubs = new Set(), memberSubs = new Set();
+  const authSubs = new Set(), postSubs = new Set(), msSubs = new Set(), memberSubs = new Set(), linkSubs = new Set();
   const cSubs = {}; // postId -> Set
   const emitAuth = () => authSubs.forEach((cb) => cb(user));
   const emitPosts = () => postSubs.forEach((cb) => cb([...posts].sort((x, y) => y.createdAt - x.createdAt)));
   const emitMs = () => msSubs.forEach((cb) => cb([...milestones].sort((x, y) => (x.date < y.date ? -1 : 1))));
   const emitMembers = () => memberSubs.forEach((cb) => cb([...members]));
+  const emitLinks = () => linkSubs.forEach((cb) => cb([...links]));
   const emitComments = (pid) => (cSubs[pid] || new Set()).forEach((cb) => cb([...(commentsByPost[pid] || [])]));
 
   return {
@@ -242,6 +296,10 @@ function createDemoBackend(owner) {
     async addMilestone(data) { milestones.push({ id: nid("m"), ...data }); emitMs(); },
     async updateMilestone(id, data) { milestones = milestones.map((m) => (m.id === id ? { ...m, ...data } : m)); emitMs(); },
     async deleteMilestone(id) { milestones = milestones.filter((m) => m.id !== id); emitMs(); },
+    watchLinks(cb) { linkSubs.add(cb); emitLinks(); return () => linkSubs.delete(cb); },
+    async addLink(data) { links.push({ id: nid("l"), ...data }); emitLinks(); },
+    async updateLink(id, data) { links = links.map((l) => (l.id === id ? { ...l, ...data } : l)); emitLinks(); },
+    async deleteLink(id) { links = links.filter((l) => l.id !== id); emitLinks(); },
     watchMembers(cb) { memberSubs.add(cb); emitMembers(); return () => memberSubs.delete(cb); },
     async setMember(email, perms) {
       const i = members.findIndex((m) => m.email === email);
@@ -287,16 +345,29 @@ function renderComposer() {
 }
 
 function renderFeed() {
-  el("feed-count").textContent = posts.length ? `${posts.length}개의 기록` : "";
   const feed = el("feed");
-  if (!posts.length) {
+  const list = selectedDate
+    ? posts.filter((p) => localYMD(p.createdAt) === selectedDate)
+    : posts;
+
+  // 헤더: 선택한 날짜 표시 + '전체 보기' 버튼
+  const titleEl = el("feed-title");
+  const clearBtn = el("clear-filter");
+  if (titleEl) titleEl.textContent = selectedDate ? `${fmtDate(selectedDate)} 기록` : "타임라인";
+  if (clearBtn) clearBtn.classList.toggle("hidden", !selectedDate);
+  el("feed-count").textContent = list.length ? `${list.length}개의 기록` : "";
+
+  if (!list.length) {
+    const msg = selectedDate
+      ? "이 날짜에 작성한 기록이 없어요."
+      : `아직 기록이 없어요.${myRole.canWrite ? " 첫 개발일지를 남겨보세요." : ""}`;
     feed.innerHTML = `<div class="post"><div class="empty">
-      <span class="em-mark">~/</span>아직 기록이 없어요.${myRole.canWrite ? " 첫 개발일지를 남겨보세요." : ""}
+      <span class="em-mark">~/</span>${msg}
     </div></div>`;
     return;
   }
-  feed.innerHTML = posts.map(postHTML).join("");
-  posts.forEach((p) => updateComments(p.id));
+  feed.innerHTML = list.map(postHTML).join("");
+  list.forEach((p) => updateComments(p.id));
 }
 
 function postHTML(p) {
@@ -388,6 +459,110 @@ function renderMilestones() {
       </div>
     </div>`;
   }).join("");
+}
+
+/* =========================================================
+   4-B. 달력 (날짜별 보기 + 공휴일 색 표시)
+   ========================================================= */
+function renderCalendar() {
+  const box = el("calendar");
+  if (!box) return;
+
+  const first = new Date(calY, calM, 1);
+  const startDow = first.getDay();                       // 0=일
+  const daysInMonth = new Date(calY, calM + 1, 0).getDate();
+  const todayStr = localYMD(_t0);
+  const postDates = new Set(posts.map((p) => localYMD(p.createdAt)).filter(Boolean));
+  const p2 = (n) => String(n).padStart(2, "0");
+
+  let cells = "";
+  for (let i = 0; i < startDow; i++) cells += `<div class="cal-cell empty"></div>`;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const ds = `${calY}-${p2(calM + 1)}-${p2(day)}`;
+    const dow = new Date(calY, calM, day).getDay();
+    const holiday = HOLIDAYS[ds];
+    const cls = ["cal-cell"];
+    if (dow === 0 || holiday) cls.push("sun");           // 일요일·공휴일 = 빨강
+    else if (dow === 6) cls.push("sat");                 // 토요일 = 파랑
+    if (ds === todayStr) cls.push("today");
+    if (ds === selectedDate) cls.push("selected");
+    const has = postDates.has(ds);
+    if (has) cls.push("has");
+    cells += `<button class="${cls.join(" ")}" data-action="pick-date" data-date="${ds}"${holiday ? ` title="${esc(holiday)}"` : ""}>
+      <span class="cal-d">${day}</span>${has ? `<span class="cal-dot"></span>` : ""}
+    </button>`;
+  }
+
+  box.innerHTML = `
+    <div class="cal-head">
+      <button class="icon-btn cal-arrow" data-action="cal-prev" title="이전 달">‹</button>
+      <div class="cal-title">
+        <span class="eyebrow">Calendar</span>
+        <span class="cal-month">${calY}년 ${calM + 1}월</span>
+      </div>
+      <button class="icon-btn cal-arrow" data-action="cal-next" title="다음 달">›</button>
+    </div>
+    <div class="cal-grid cal-week">
+      ${WEEK_KO.map((w, i) => `<div class="cal-wd ${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</div>`).join("")}
+    </div>
+    <div class="cal-grid cal-days">${cells}</div>`;
+}
+
+/* =========================================================
+   4-C. 주요 링크 (비공개 — 로그인 멤버만 열람)
+   ========================================================= */
+function renderLinks() {
+  const box = el("links");
+  if (!box) return;
+  const addBtn = myRole.isOwner
+    ? `<button class="icon-btn" data-action="link-add" title="링크 추가" aria-label="링크 추가">+</button>` : "";
+  let body;
+  if (!links.length) {
+    body = `<div class="links-empty">${myRole.isOwner ? "+ 버튼으로 자주 쓰는 링크를 추가하세요." : "등록된 링크가 없어요."}</div>`;
+  } else {
+    body = links.map((l) => {
+      const actions = myRole.isOwner ? `
+        <span class="link-actions">
+          <button class="icon-btn" data-action="link-edit" data-id="${l.id}" title="수정" aria-label="수정">✎</button>
+          <button class="icon-btn danger" data-action="link-delete" data-id="${l.id}" title="삭제" aria-label="삭제">✕</button>
+        </span>` : "";
+      return `<div class="link-row">
+        <a class="link-item" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">
+          <span class="link-tick">└</span><span class="link-title">${esc(l.title)}</span><span class="link-ext">↗</span>
+        </a>${actions}
+      </div>`;
+    }).join("");
+  }
+  box.innerHTML = `
+    <div class="links-head">
+      <div><span class="eyebrow">Links</span><h2>주요 링크</h2></div>
+      ${addBtn}
+    </div>
+    <div class="links-body">${body}</div>`;
+}
+
+function openLinkModal(existing) {
+  const l = existing || { title: "", url: "" };
+  el("overlay-root").innerHTML = `
+  <div class="modal-back" data-action="close-modal-bg">
+    <div class="modal" style="max-width:440px">
+      <div class="modal-head">
+        <div><h2>${existing ? "링크 수정" : "링크 추가"}</h2></div>
+        <button class="icon-btn" data-action="close-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="fld"><span>이름</span>
+          <input id="link-title" type="text" value="${esc(l.title)}" placeholder="예: 기획서 모음" /></label>
+        <label class="fld"><span>주소 (URL)</span>
+          <input id="link-url" type="url" value="${esc(l.url)}" placeholder="https://..." /></label>
+        <div class="modal-foot">
+          <button class="btn btn-sm" data-action="close-modal">취소</button>
+          <button class="btn btn-sm btn-primary" data-action="link-save" ${existing ? `data-id="${existing.id}"` : ""}>저장</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  setTimeout(() => $("#link-title")?.focus(), 30);
 }
 
 /* =========================================================
@@ -617,6 +792,37 @@ function onClick(e) {
       return safe(() => (id ? backend.updateMilestone(id, data) : backend.addMilestone(data)), "저장했습니다.");
     }
 
+    case "link-add":  return openLinkModal();
+    case "link-edit": return openLinkModal(links.find((l) => l.id === id));
+    case "link-delete":
+      if (confirm("이 링크를 삭제할까요?")) return safe(() => backend.deleteLink(id));
+      return;
+    case "link-save": {
+      const title = $("#link-title").value.trim();
+      let url = $("#link-url").value.trim();
+      if (!title) return toast("이름을 입력하세요.");
+      if (!url) return toast("주소(URL)를 입력하세요.");
+      if (!/^https?:\/\//i.test(url)) url = "https://" + url;   // 스킴 없으면 보정
+      closeModal();
+      return safe(() => (id ? backend.updateLink(id, { title, url }) : backend.addLink({ title, url })), "저장했습니다.");
+    }
+
+    case "pick-date": {
+      const d = t.dataset.date;
+      selectedDate = (selectedDate === d) ? null : d;   // 같은 날 다시 누르면 해제
+      renderCalendar(); renderFeed();
+      return;
+    }
+    case "clear-date":
+      selectedDate = null; renderCalendar(); renderFeed();
+      return;
+    case "cal-prev":
+      if (--calM < 0) { calM = 11; calY--; } renderCalendar();
+      return;
+    case "cal-next":
+      if (++calM > 11) { calM = 0; calY++; } renderCalendar();
+      return;
+
     case "close-modal": return closeModal();
     case "close-modal-bg": if (e.target === t) closeModal(); return;
   }
@@ -680,6 +886,8 @@ function showApp() {
   el("app").classList.remove("hidden");
   renderTopbar();
   renderComposer();
+  renderCalendar();
+  renderLinks();
 }
 
 /* =========================================================
@@ -689,10 +897,11 @@ let unsubData = [];
 function startDataStreams() {
   stopDataStreams();
   unsubData.push(backend.watchPosts((list) => {
-    posts = list; renderFeed();
+    posts = list; renderFeed(); renderCalendar();
     syncCommentSubs(posts.map((p) => p.id));
   }));
   unsubData.push(backend.watchMilestones((list) => { milestones = list; renderMilestones(); }));
+  unsubData.push(backend.watchLinks((list) => { links = list; renderLinks(); }));
   if (myRole.isOwner) {
     unsubData.push(backend.watchMembers((list) => { members = list; renderMemberList(); }));
   }

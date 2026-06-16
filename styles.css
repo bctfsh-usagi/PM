@@ -138,6 +138,84 @@ a { color: inherit; }
 
 .col-main { min-width: 0; }
 
+/* ---------- 달력 (날짜별 보기) ---------- */
+.cal {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px 14px 14px;
+  margin-bottom: 20px;
+}
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.cal-title { text-align: center; line-height: 1.15; }
+.cal-title .eyebrow {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .5px;
+  color: var(--accent); text-transform: uppercase; display: block;
+}
+.cal-month { font-size: 14px; font-weight: 600; letter-spacing: -.2px; }
+.cal-arrow { font-size: 20px; color: var(--ink-soft); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-week { margin-bottom: 4px; }
+.cal-wd {
+  text-align: center; font-family: var(--mono); font-size: 10.5px;
+  color: var(--muted); padding: 2px 0;
+}
+.cal-wd.sun { color: var(--danger); }
+.cal-wd.sat { color: #3B6CA8; }
+.cal-cell {
+  position: relative; height: 40px; border: none; background: transparent;
+  border-radius: 9px; cursor: pointer; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft);
+  transition: background .12s;
+}
+.cal-cell.empty { cursor: default; }
+.cal-cell:not(.empty):hover { background: var(--paper); }
+.cal-cell.sun { color: var(--danger); }
+.cal-cell.sat { color: #3B6CA8; }
+.cal-cell.has { font-weight: 600; }
+.cal-cell.today { box-shadow: inset 0 0 0 1.5px var(--line-strong); }
+.cal-cell.selected { background: var(--accent); color: #fff; box-shadow: none; }
+.cal-cell.selected.sun, .cal-cell.selected.sat { color: #fff; }
+.cal-dot {
+  position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%);
+  width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
+}
+.cal-cell.selected .cal-dot { background: #fff; }
+
+/* ---------- 주요 링크 ---------- */
+.links-card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 12px 14px; margin-bottom: 20px;
+}
+.links-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.links-head h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.2px; }
+.links-head .eyebrow {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .5px;
+  color: var(--accent); text-transform: uppercase; display: block; margin-bottom: 2px;
+}
+.links-body { display: flex; flex-direction: column; gap: 1px; }
+.links-empty { font-size: 12.5px; color: var(--muted); padding: 6px 2px; }
+.link-row { display: flex; align-items: center; gap: 4px; }
+.link-item {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px;
+  padding: 7px 8px; border-radius: 9px; text-decoration: none;
+  color: var(--ink-soft); transition: background .12s;
+}
+.link-item:hover { background: var(--paper); }
+.link-tick { font-family: var(--mono); color: var(--muted); font-size: 13px; flex: none; }
+.link-title {
+  flex: 1; min-width: 0; font-size: 14px; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.link-item:hover .link-title { color: var(--accent); }
+.link-ext { font-family: var(--mono); font-size: 11px; color: var(--muted); opacity: 0; flex: none; }
+.link-item:hover .link-ext { opacity: 1; }
+.link-actions { display: flex; gap: 2px; opacity: 0; transition: opacity .15s; flex: none; }
+.link-row:hover .link-actions { opacity: 1; }
+
 /* ---------- 작성 박스 ---------- */
 .composer {
   background: var(--card);
@@ -170,6 +248,7 @@ a { color: inherit; }
 }
 .feed-head h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.2px; }
 .feed-head .count { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+#clear-filter { margin-left: auto; align-self: center; }
 
 .post {
   background: var(--card);

@@ -33,12 +33,15 @@
     </header>
 
     <main class="layout">
-      <!-- 왼쪽: 타임라인 -->
+      <!-- 왼쪽: 달력 + 주요 링크 + 타임라인 -->
       <section class="col-main">
+        <div id="calendar" class="cal"></div>
+        <div id="links" class="links-card"></div>
         <div id="composer-slot"></div>
         <div class="feed-head">
-          <h2>타임라인</h2>
+          <h2 id="feed-title">타임라인</h2>
           <span class="count" id="feed-count"></span>
+          <button id="clear-filter" class="btn btn-sm hidden" data-action="clear-date">전체 보기</button>
         </div>
         <div class="feed" id="feed"></div>
       </section>
