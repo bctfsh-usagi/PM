@@ -376,12 +376,13 @@ a { color: inherit; }
   display: block; font-size: 12px; font-weight: 600; color: var(--ink-soft);
   margin-bottom: 5px;
 }
-.fld input, .fld select {
+.fld input, .fld select, .fld textarea {
   width: 100%; border: 1px solid var(--line-strong); border-radius: 10px;
   padding: 9px 12px; font-family: inherit; font-size: 14px; outline: none;
   background: var(--card); color: var(--ink);
 }
-.fld input:focus, .fld select:focus { border-color: var(--accent); }
+.fld textarea { resize: vertical; line-height: 1.6; min-height: 88px; }
+.fld input:focus, .fld select:focus, .fld textarea:focus { border-color: var(--accent); }
 .fld-row { display: flex; gap: 10px; }
 .fld-row .fld { flex: 1; }
 .modal-foot {
