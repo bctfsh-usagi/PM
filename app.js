@@ -24,6 +24,67 @@ function linkify(s = "") {
   return esc(s).replace(/(https?:\/\/[^\s<]+)/g,
     (u) => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
 }
+// ── 마크다운 렌더링 (HTML 주입 차단: 먼저 이스케이프 후 서식 적용) ──
+function mdInline(text) {
+  let s = esc(text);
+  const stash = [];
+  const put = (html) => { stash.push(html); return "\uE000" + (stash.length - 1) + "\uE001"; };
+  s = s.replace(/`([^`\n]+)`/g, (_, c) => put(`<code>${c}</code>`));
+  s = s.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (m, t, u) => {
+    if (!/^(https?:\/\/|\/|#|mailto:)/i.test(u)) return m;
+    return put(`<a href="${u}" target="_blank" rel="noopener">${t}</a>`);
+  });
+  s = s.replace(/\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/\*(?!\s)([^*\n]+?)(?<!\s)\*/g, "<em>$1</em>");
+  s = s.replace(/~~(?!\s)([^~\n]+?)(?<!\s)~~/g, "<del>$1</del>");
+  s = s.replace(/(^|[\s(])(https?:\/\/[^\s<]+)/g,
+    (_, pre, u) => `${pre}<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+  return s.replace(/\uE000(\d+)\uE001/g, (_, i) => stash[+i]);
+}
+function mdToHTML(src = "") {
+  const lines = String(src).replace(/\r\n?/g, "\n").split("\n");
+  const out = []; let i = 0; const n = lines.length;
+  const isBlockStart = (l) =>
+    /^```/.test(l) || /^\s*$/.test(l) || /^(#{1,6})\s+/.test(l) ||
+    /^\s*>\s?/.test(l) || /^\s*[-*+]\s+/.test(l) || /^\s*\d+\.\s+/.test(l) ||
+    /^(-{3,}|\*{3,}|_{3,})\s*$/.test(l);
+  while (i < n) {
+    const line = lines[i];
+    if (/^```/.test(line)) {
+      const body = []; i++;
+      while (i < n && !/^```/.test(lines[i])) { body.push(lines[i]); i++; }
+      i++;
+      out.push(`<pre><code>${esc(body.join("\n"))}</code></pre>`); continue;
+    }
+    if (/^\s*$/.test(line)) { i++; continue; }
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      const lvl = Math.min(h[1].length, 3);
+      const tag = lvl === 1 ? "h3" : lvl === 2 ? "h4" : "h5";
+      out.push(`<${tag}>${mdInline(h[2])}</${tag}>`); i++; continue;
+    }
+    if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { out.push("<hr>"); i++; continue; }
+    if (/^\s*>\s?/.test(line)) {
+      const body = [];
+      while (i < n && /^\s*>\s?/.test(lines[i])) { body.push(lines[i].replace(/^\s*>\s?/, "")); i++; }
+      out.push(`<blockquote>${mdInline(body.join("\n")).replace(/\n/g, "<br>")}</blockquote>`); continue;
+    }
+    if (/^\s*[-*+]\s+/.test(line)) {
+      const items = [];
+      while (i < n && /^\s*[-*+]\s+/.test(lines[i])) { items.push(`<li>${mdInline(lines[i].replace(/^\s*[-*+]\s+/, ""))}</li>`); i++; }
+      out.push(`<ul>${items.join("")}</ul>`); continue;
+    }
+    if (/^\s*\d+\.\s+/.test(line)) {
+      const items = [];
+      while (i < n && /^\s*\d+\.\s+/.test(lines[i])) { items.push(`<li>${mdInline(lines[i].replace(/^\s*\d+\.\s+/, ""))}</li>`); i++; }
+      out.push(`<ol>${items.join("")}</ol>`); continue;
+    }
+    const para = [];
+    while (i < n && !isBlockStart(lines[i])) { para.push(lines[i]); i++; }
+    out.push(`<p>${mdInline(para.join("\n")).replace(/\n/g, "<br>")}</p>`);
+  }
+  return out.join("\n");
+}
 function initial(name = "?") {
   const t = name.trim();
   return t ? t[0].toUpperCase() : "?";
@@ -79,6 +140,30 @@ function toggleTheme() {
   const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = next;
   try { localStorage.setItem("devlog-theme", next); } catch (_) {}
+}
+// 전체 글을 마크다운(.md) 파일로 내려받기 (AI에 바로 전달하기 좋게)
+function exportMarkdown() {
+  if (!posts.length) { toast("내보낼 글이 없어요"); return; }
+  const pad = (x) => String(x).padStart(2, "0");
+  const stamp = (d) => d ? `${localYMD(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}` : "";
+  const sorted = [...posts].sort(
+    (a, b) => (tsToDate(a.createdAt)?.getTime() || 0) - (tsToDate(b.createdAt)?.getTime() || 0)
+  );
+  const lines = [
+    `# ${PROJECT_NAME || "개발일지"}`, "",
+    `> 내보낸 시각: ${stamp(new Date())} · 총 ${sorted.length}개`, "", "---", "",
+  ];
+  for (const p of sorted) {
+    lines.push(`## ${stamp(tsToDate(p.createdAt))} — ${p.authorName || "익명"}`, "",
+      (p.content || "").trim(), "", "---", "");
+  }
+  const blob = new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `devlog-${localYMD(new Date())}.md`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+  toast("마크다운으로 내보냈어요");
 }
 
 /* =========================================================
@@ -343,7 +428,7 @@ function renderComposer() {
     <div class="composer">
       <div class="composer-row">
         ${avatarHTML(currentUser)}
-        <textarea id="composer-input" rows="1" placeholder="오늘 어떤 작업을 했나요?  (⌘/Ctrl + Enter 로 기록)"></textarea>
+        <textarea id="composer-input" rows="1" placeholder="오늘 어떤 작업을 했나요?  마크다운 지원 · ⌘/Ctrl+Enter 로 기록"></textarea>
       </div>
       <div class="composer-foot">
         <span class="char-hint" id="composer-hint"></span>
@@ -395,7 +480,7 @@ function postHTML(p) {
         ${canDel ? `<button class="icon-btn danger" title="삭제" data-action="delete-post" data-id="${p.id}">✕</button>` : ""}
       </div>
     </div>
-    <div class="post-body">${linkify(p.content)}</div>
+    <div class="post-body">${mdToHTML(p.content)}</div>
     <div class="comments">
       <button class="comments-toggle" data-action="toggle-comments" data-id="${p.id}">
         💬 댓글 <span id="cc-${p.id}"></span>
@@ -722,6 +807,7 @@ function onClick(e) {
     case "signin":  return safe(() => backend.signIn());
     case "signout": return safe(() => backend.signOut());
     case "toggle-theme": return toggleTheme();
+    case "export-md": return exportMarkdown();
 
     case "compose-submit": {
       const ta = el("composer-input"); const v = ta.value.trim();
