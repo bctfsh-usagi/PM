@@ -67,6 +67,10 @@
 
 * { box-sizing: border-box; }
 
+/* 모든 입력 요소는 테마 글자색을 따르도록 (다크모드에서 검정 글씨 방지) */
+input, textarea, select { color: var(--ink); }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+
 html, body { height: 100%; }
 
 body {
@@ -505,6 +509,7 @@ a { color: inherit; }
 .add-member input {
   flex: 1; border: 1px solid var(--line-strong); border-radius: 10px;
   padding: 9px 12px; font-family: inherit; font-size: 13.5px; outline: none;
+  background: var(--card);
 }
 .add-member input:focus { border-color: var(--accent); }
 
