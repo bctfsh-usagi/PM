@@ -465,7 +465,7 @@ function renderFeed() {
 
 function postHTML(p) {
   const mine = p.authorEmail === currentUser.email;
-  const canDel = myRole.isOwner || mine;
+  const canDel = mine; // 작성자 본인만 수정·삭제
   const opened = openComments.has(p.id);
   return `
   <article class="post" id="post-${p.id}">
@@ -507,7 +507,7 @@ function updateComments(pid) {
   if (!listEl) return;
   listEl.innerHTML = list.map((c) => {
     const mine = c.authorEmail === currentUser.email;
-    const canDel = myRole.isOwner || mine;
+    const canDel = mine; // 작성자 본인만 수정·삭제
     return `
     <div class="comment">
       ${avatarHTML({ name: c.authorName, photo: c.authorPhoto }, "sm")}
@@ -838,7 +838,8 @@ function onClick(e) {
       return safe(() => backend.addComment(id, v));
     }
     case "delete-comment":
-      return safe(() => backend.deleteComment(t.dataset.postid, id));
+      if (confirm("이 댓글을 삭제할까요?")) return safe(() => backend.deleteComment(t.dataset.postid, id));
+      return;
     case "edit-comment":
       return openCommentEditModal(t.dataset.postid, (commentsCache[t.dataset.postid] || []).find((c) => c.id === id));
     case "comment-save": {
