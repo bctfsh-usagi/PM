@@ -379,13 +379,14 @@ a { color: inherit; }
 .comment .icon-btn { width: 24px; height: 24px; opacity: 0; }
 .comment:hover .icon-btn { opacity: 1; }
 
-.comment-form { display: flex; gap: 9px; margin-top: 10px; align-items: center; }
-.comment-form input {
-  flex: 1; border: 1px solid var(--line-strong); border-radius: 999px;
-  padding: 8px 14px; font-family: inherit; font-size: 13.5px; outline: none;
-  background: var(--card);
+.comment-form { display: flex; gap: 9px; margin-top: 10px; align-items: flex-start; }
+.comment-form textarea {
+  flex: 1; border: 1px solid var(--line-strong); border-radius: 16px;
+  padding: 8px 14px; font-family: inherit; font-size: 13.5px; line-height: 1.5;
+  outline: none; background: var(--card); resize: none;
+  min-height: 20px; max-height: 180px; overflow-y: auto;
 }
-.comment-form input:focus { border-color: var(--accent); }
+.comment-form textarea:focus { border-color: var(--accent); }
 
 /* ---------- 오른쪽: 마일스톤 (시그니처 타임라인) ---------- */
 .panel {

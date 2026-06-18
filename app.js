@@ -492,7 +492,7 @@ function postHTML(p) {
         ${myRole.canComment ? `
         <div class="comment-form">
           ${avatarHTML(currentUser, "sm")}
-          <input type="text" placeholder="댓글 달기…" data-comment-input="${p.id}" />
+          <textarea rows="1" class="comment-ta" placeholder="댓글 달기…  (Shift+Enter 줄바꿈, 마크다운 지원)" data-comment-input="${p.id}"></textarea>
           <button class="btn btn-sm btn-primary" data-action="comment-submit" data-id="${p.id}">등록</button>
         </div>` : ""}
       </div>
@@ -836,7 +836,7 @@ function onClick(e) {
     }
     case "comment-submit": {
       const inp = $(`[data-comment-input="${id}"]`); const v = inp.value.trim();
-      if (!v) return; inp.value = "";
+      if (!v) return; inp.value = ""; inp.style.height = "auto";
       return safe(() => backend.addComment(id, v));
     }
     case "delete-comment":
@@ -931,8 +931,8 @@ function onKeydown(e) {
   if (e.target.id === "composer-input" && (e.metaKey || e.ctrlKey) && e.key === "Enter") {
     e.preventDefault(); onClick({ target: $('[data-action="compose-submit"]') });
   }
-  // 댓글: Enter
-  if (e.target.dataset?.commentInput && e.key === "Enter") {
+  // 댓글: Enter=등록, Shift+Enter=줄바꿈
+  if (e.target.dataset?.commentInput && e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     const pid = e.target.dataset.commentInput;
     onClick({ target: $(`[data-action="comment-submit"][data-id="${pid}"]`) });
@@ -947,6 +947,9 @@ function onInput(e) {
     ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px";
     const n = ta.value.length;
     el("composer-hint").textContent = n ? `${n}자` : "";
+  } else if (e.target.dataset?.commentInput) {
+    const ta = e.target;
+    ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px";
   }
 }
 
