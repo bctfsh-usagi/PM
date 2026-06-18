@@ -46,8 +46,9 @@ function mdInline(text) {
 function mdToHTML(src = "") {
   const lines = String(src).replace(/\r\n?/g, "\n").split("\n");
   const out = []; let i = 0; const n = lines.length;
+  // 블록 시작 판정 (빈 줄은 제외 — 빈 줄은 본문 안에서 그대로 보존)
   const isBlockStart = (l) =>
-    /^```/.test(l) || /^\s*$/.test(l) || /^(#{1,6})\s+/.test(l) ||
+    /^```/.test(l) || /^(#{1,6})\s+/.test(l) ||
     /^\s*>\s?/.test(l) || /^\s*[-*+]\s+/.test(l) || /^\s*\d+\.\s+/.test(l) ||
     /^(-{3,}|\*{3,}|_{3,})\s*$/.test(l);
   while (i < n) {
@@ -81,9 +82,13 @@ function mdToHTML(src = "") {
       while (i < n && /^\s*\d+\.\s+/.test(lines[i])) { items.push(`<li>${mdInline(lines[i].replace(/^\s*\d+\.\s+/, ""))}</li>`); i++; }
       out.push(`<ol>${items.join("")}</ol>`); continue;
     }
+    // 본문 묶음: 블록 전까지 모음(빈 줄 포함). 양 끝 빈 줄만 정리하고
+    // 내부 빈 줄은 그대로 보존 → 사용자가 넣은 공백 줄이 그대로 보임
     const para = [];
     while (i < n && !isBlockStart(lines[i])) { para.push(lines[i]); i++; }
-    out.push(`<p>${mdInline(para.join("\n")).replace(/\n/g, "<br>")}</p>`);
+    while (para.length && /^\s*$/.test(para[0])) para.shift();
+    while (para.length && /^\s*$/.test(para[para.length - 1])) para.pop();
+    if (para.length) out.push(`<p>${mdInline(para.join("\n")).replace(/\n/g, "<br>")}</p>`);
   }
   return out.join("\n");
 }
