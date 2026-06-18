@@ -35,7 +35,9 @@ function mdInline(text) {
     return put(`<a href="${u}" target="_blank" rel="noopener">${t}</a>`);
   });
   s = s.replace(/\*\*(?!\s)([^*\n]+?)(?<!\s)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/(?<![\w*])__(?!\s)([^_\n]+?)(?<!\s)__(?![\w*])/g, "<strong>$1</strong>");
   s = s.replace(/\*(?!\s)([^*\n]+?)(?<!\s)\*/g, "<em>$1</em>");
+  s = s.replace(/(?<![\w*])_(?!\s)([^_\n]+?)(?<!\s)_(?![\w*])/g, "<em>$1</em>");
   s = s.replace(/~~(?!\s)([^~\n]+?)(?<!\s)~~/g, "<del>$1</del>");
   s = s.replace(/(^|[\s(])(https?:\/\/[^\s<]+)/g,
     (_, pre, u) => `${pre}<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
@@ -480,7 +482,7 @@ function postHTML(p) {
         ${canDel ? `<button class="icon-btn danger" title="삭제" data-action="delete-post" data-id="${p.id}">✕</button>` : ""}
       </div>
     </div>
-    <div class="post-body">${mdToHTML(p.content)}</div>
+    <div class="post-body md">${mdToHTML(p.content)}</div>
     <div class="comments">
       <button class="comments-toggle" data-action="toggle-comments" data-id="${p.id}">
         💬 댓글 <span id="cc-${p.id}"></span>
@@ -516,7 +518,7 @@ function updateComments(pid) {
           <span class="comment-author">${esc(c.authorName)}</span>
           <span class="comment-time">${timeAgo(c.createdAt)}</span>
         </div>
-        <div class="comment-text">${linkify(c.content)}</div>
+        <div class="comment-text md">${mdToHTML(c.content)}</div>
       </div>
       ${canDel ? `<button class="icon-btn" title="수정" data-action="edit-comment" data-postid="${pid}" data-id="${c.id}">✎</button>` : ""}
       ${canDel ? `<button class="icon-btn danger" title="삭제" data-action="delete-comment" data-postid="${pid}" data-id="${c.id}">✕</button>` : ""}
